@@ -20,10 +20,10 @@ http://localhost:3001/**
 http://localhost:3001/auth/callback
 ```
 
-#### For Production (after deploying to Vercel):
+#### For Production (Vercel):
 ```
-https://your-app-name.vercel.app/**
-https://your-app-name.vercel.app/auth/callback
+https://io-gold-xi.vercel.app/**
+https://io-gold-xi.vercel.app/auth/callback
 ```
 
 ### Step 3: Set Site URL
