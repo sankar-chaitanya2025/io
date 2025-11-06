@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 const choices = [
   {
@@ -22,9 +24,68 @@ const choices = [
 
 export default function GenderSelectionPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const handleSelect = (value: string) => {
-    router.push(`/onboarding/username?gender=${value}`);
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          router.push('/onboarding/email');
+          return;
+        }
+        setUserId(session.user.id);
+      } catch (err) {
+        console.error('Auth check error:', err);
+        router.push('/onboarding/email');
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [router]);
+
+  const handleSelect = async (value: string) => {
+    if (!userId) return;
+    
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user.email) {
+        throw new Error('No email found');
+      }
+
+      const { error: upsertError } = await supabase
+        .from('users')
+        .upsert(
+          {
+            id: userId,
+            email: session.user.email,
+            gender: value as 'dude' | 'girl',
+            alias: '',
+            is_online: true,
+          },
+          { onConflict: 'id' }
+        );
+
+      if (upsertError) {
+        throw upsertError;
+      }
+
+      router.push(`/onboarding/username?gender=${value}`);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save gender';
+      setError(errorMessage);
+      console.error('Gender selection error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -62,31 +123,54 @@ export default function GenderSelectionPage() {
           Choose wisely. The universe is watching. This stays secret until you BOTH wanna reveal. Be honest or prepare for cosmic karma.
         </motion.p>
 
-        <div className="mt-14 grid w-full max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2">
-          {choices.map((choice) => (
-            <motion.button
-              key={choice.id}
-              onClick={() => handleSelect(choice.id)}
-              whileHover={{ scale: 1.05, rotate: [-1.5, 1.5, 0] }}
-              whileTap={{ scale: 0.97 }}
-              className={`group relative flex h-36 flex-col items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/5 text-lg font-semibold uppercase tracking-widest text-white/90 shadow-[0_0_60px_rgba(0,0,0,0.35)] transition`}
-            >
-              <span
-                className={`absolute inset-0 bg-gradient-to-br ${choice.color} opacity-0 transition duration-300 group-hover:opacity-100`}
-              />
+        {authLoading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-14 flex flex-col items-center gap-4"
+          >
+            <Loader className="h-8 w-8 animate-spin text-[var(--accent-electric)]" />
+            <p className="text-white/70">Loading...</p>
+          </motion.div>
+        ) : (
+          <>
+            {error && (
               <motion.div
-                className="relative flex h-12 w-12 items-center justify-center rounded-full bg-black/30 text-3xl"
-                animate={{ y: [0, -4, 0] }}
-                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-8 rounded-2xl bg-red-500/20 border border-red-500/50 px-4 py-3 text-sm text-red-200"
               >
-                {choice.icon}
+                {error}
               </motion.div>
-              <span className="relative mt-4 text-sm font-bold tracking-[0.4em] text-white/80">
-                {choice.label.toUpperCase()}
-              </span>
-            </motion.button>
-          ))}
-        </div>
+            )}
+            <div className="mt-14 grid w-full max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2">
+              {choices.map((choice) => (
+                <motion.button
+                  key={choice.id}
+                  onClick={() => handleSelect(choice.id)}
+                  disabled={loading}
+                  whileHover={!loading ? { scale: 1.05, rotate: [-1.5, 1.5, 0] } : {}}
+                  whileTap={!loading ? { scale: 0.97 } : {}}
+                  className={`group relative flex h-36 flex-col items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/5 text-lg font-semibold uppercase tracking-widest text-white/90 shadow-[0_0_60px_rgba(0,0,0,0.35)] transition disabled:opacity-60 disabled:cursor-not-allowed`}
+                >
+                  <span
+                    className={`absolute inset-0 bg-gradient-to-br ${choice.color} opacity-0 transition duration-300 group-hover:opacity-100`}
+                  />
+                  <motion.div
+                    className="relative flex h-12 w-12 items-center justify-center rounded-full bg-black/30 text-3xl"
+                    animate={{ y: [0, -4, 0] }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    {choice.icon}
+                  </motion.div>
+                  <span className="relative mt-4 text-sm font-bold tracking-[0.4em] text-white/80">
+                    {loading ? 'Loading...' : choice.label.toUpperCase()}
+                  </span>
+                </motion.button>
+              ))}
+            </div>
+          </>
+        )}
 
         <p className="mt-10 rounded-3xl border border-white/10 bg-white/10 px-6 py-4 text-xs uppercase tracking-[0.35em] text-white/60">
           (So be honest or prepare for cosmic karma.)
