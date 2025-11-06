@@ -15,14 +15,17 @@ Add these URLs to **"Redirect URLs"** section:
 #### For Local Development:
 ```
 http://localhost:3000/**
+http://localhost:3000/auth/confirm
 http://localhost:3000/auth/callback
 http://localhost:3001/**
+http://localhost:3001/auth/confirm
 http://localhost:3001/auth/callback
 ```
 
 #### For Production (Vercel):
 ```
 https://io-gold-xi.vercel.app/**
+https://io-gold-xi.vercel.app/auth/confirm
 https://io-gold-xi.vercel.app/auth/callback
 ```
 
