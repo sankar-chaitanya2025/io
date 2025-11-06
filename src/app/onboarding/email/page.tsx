@@ -4,17 +4,49 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { ArrowLeft, Rocket } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 const domainHint = '@rguktn.ac.in';
 
 export default function EmailVerificationPage() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email.trim()) return;
-    setSubmitted(true);
+
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail.endsWith('@rguktn.ac.in')) {
+      setError('Please use your college email (@rguktn.ac.in)');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { error: signInError } = await supabase.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/gender`,
+        },
+      });
+
+      if (signInError) {
+        throw signInError;
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send magic link';
+      setError(errorMessage);
+      console.error('Email verification error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -38,10 +70,10 @@ export default function EmailVerificationPage() {
           </div>
           <div className="space-y-4">
             <h1 className="font-display text-3xl font-semibold text-white sm:text-4xl">
-              Verify You're Real
+              Verify You&apos;re Real
             </h1>
             <p className="text-base text-white/65">
-              Drop your {domainHint} email. No spam, no nonsense — just the magic link to unlock the mayhem.
+              Drop your {domainHint} email. No spam, no nonsense &mdash; just the magic link to unlock the mayhem.
             </p>
           </div>
 
@@ -50,41 +82,55 @@ export default function EmailVerificationPage() {
               <input
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setError(null);
+                }}
                 placeholder={`you${domainHint}`}
                 required
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-base text-white outline-none transition focus:border-[var(--accent-electric)] focus:bg-white/10"
+                disabled={loading || submitted}
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-base text-white outline-none transition focus:border-[var(--accent-electric)] focus:bg-white/10 disabled:opacity-60"
               />
             </div>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl bg-red-500/20 border border-red-500/50 px-4 py-3 text-sm text-red-200"
+              >
+                {error}
+              </motion.div>
+            )}
             <motion.button
               type="submit"
+              disabled={loading || submitted}
               whileTap={{ scale: 0.97 }}
-              className="group relative inline-flex items-center justify-center gap-3 overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(120deg,_rgba(0,240,255,0.4),_rgba(255,0,110,0.4))] px-8 py-4 text-base font-semibold uppercase tracking-widest text-white transition"
+              className="group relative inline-flex items-center justify-center gap-3 overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(120deg,_rgba(0,240,255,0.4),_rgba(255,0,110,0.4))] px-8 py-4 text-base font-semibold uppercase tracking-widest text-white transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <span className="absolute inset-0 opacity-0 blur-xl transition group-hover:opacity-100" style={{
                 background:
                   'linear-gradient(140deg, rgba(0,240,255,0.4), rgba(255,0,110,0.4), rgba(57,255,20,0.4))',
               }} />
               <span className="relative flex items-center gap-3">
-                Send Magic Link
+                {loading ? 'Sending...' : 'Send Magic Link'}
                 <Rocket className="h-4 w-4" />
               </span>
             </motion.button>
           </form>
 
           <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: submitted ? 1 : 0 }}
-            className="mt-8 rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-sm uppercase tracking-[0.35em] text-white/80"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: submitted ? 1 : 0 }}
+          className="mt-8 rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-sm uppercase tracking-[0.35em] text-white/80"
           >
-            {submitted ? (
-              <span className="flex flex-col gap-2 text-base normal-case tracking-normal text-white/70">
-                <span className="text-lg font-semibold text-white">✨ Check your email, genius</span>
-                We sent you a link. Click it or cry about it. (Check spam if you're that person.)
-              </span>
-            ) : (
-              <span className="text-white/40">We'll send a link. Click it. Don't overthink it.</span>
-            )}
+          {submitted ? (
+            <span className="flex flex-col gap-2 text-base normal-case tracking-normal text-white/70">
+              <span className="text-lg font-semibold text-white">✨ Check your email, genius</span>
+              We sent you a link. Click it or cry about it. (Check spam if you&apos;re that person.)
+            </span>
+          ) : (
+            <span className="text-white/40">We&apos;ll send a link. Click it. Don&apos;t overthink it.</span>
+          )}
           </motion.p>
         </motion.div>
       </div>
