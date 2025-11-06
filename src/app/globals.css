@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --background: #050505;
+  --foreground: #f7f7f7;
+  --accent-electric: #00f0ff;
+  --accent-pink: #ff006e;
+  --accent-green: #39ff14;
+  --muted: #141414;
+  --muted-soft: #1f1f26;
+  --muted-foreground: #a1a1b5;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent-electric);
+  --color-accent-hot: var(--accent-pink);
+  --color-accent-toxic: var(--accent-green);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-heading);
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(0, 240, 255, 0.18), transparent 55%),
+    radial-gradient(circle at 80% 20%, rgba(255, 0, 110, 0.18), transparent 55%),
+    radial-gradient(circle at 50% 80%, rgba(57, 255, 20, 0.15), transparent 65%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), "Inter", system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+  letter-spacing: 0.01em;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+::selection {
+  background: rgba(255, 0, 110, 0.35);
+  color: var(--foreground);
+}
+
+html {
+  scroll-behavior: smooth;
+}
