@@ -9,6 +9,7 @@ import { generateAlias, generateOnlineCount, getRandomDelay } from '@/lib/names'
 import { supabase } from '@/lib/supabase';
 import { useChat } from '@/hooks/useChat';
 import { RealtimeDebugger } from '../debug/realtime-debugger';
+import { DevUserCreator } from '../debug/dev-user-creator';
 
 const autoResponses = [
   `Okay but that's kinda iconic.`,
@@ -180,10 +181,7 @@ export function DashboardContent() {
           .eq('is_online', true);
         
         if (count !== null) {
-          // Add some randomness to make it feel more alive
-          const variation = Math.floor(Math.random() * 20) - 10; // -10 to +10
-          const adjustedCount = Math.max(30, count + variation);
-          setOnlineCount(adjustedCount);
+          setOnlineCount(count);
         }
       } catch (err) {
         console.error('Error updating online count:', err);
@@ -245,6 +243,17 @@ export function DashboardContent() {
     setError(null);
 
     try {
+      console.log('Starting matchmaking for user:', userId, 'gender:', userGender);
+
+      // First, check total online users
+      const { count: totalOnline } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_online', true)
+        .neq('id', userId);
+
+      console.log('Total online users (excluding self):', totalOnline);
+
       // Find online user with opposite gender
       const { data: potentialMatches, error: queryError } = await supabase
         .from('users')
@@ -258,9 +267,11 @@ export function DashboardContent() {
         throw queryError;
       }
 
+      console.log('Potential matches found:', potentialMatches?.length || 0);
+
       if (!potentialMatches || potentialMatches.length === 0) {
         setStatus('idle');
-        setError('No users available right now. Try again later!');
+        setError(`No ${userGender === 'dude' ? 'girls' : 'dudes'} online right now. Try again later!`);
         setTimeout(() => setError(null), 3000);
         return;
       }
@@ -281,7 +292,11 @@ export function DashboardContent() {
         });
       }
 
+      console.log('Recently matched users to exclude:', matchedUserIds.size);
+
       const availableMatches = potentialMatches.filter(match => !matchedUserIds.has(match.id));
+
+      console.log('Available matches after filtering:', availableMatches.length);
 
       if (availableMatches.length === 0) {
         setStatus('idle');
@@ -308,6 +323,8 @@ export function DashboardContent() {
           break;
         }
       }
+
+      console.log('Selected match:', selectedMatch.alias, selectedMatch.id);
 
       setMatchId(selectedMatch.id);
       setMatchAlias(selectedMatch.alias || generateAlias());
@@ -826,6 +843,8 @@ export function DashboardContent() {
       
       {/* Development-only realtime debugger */}
       {process.env.NODE_ENV === 'development' && <RealtimeDebugger />}
+      {/* Development-only user creator */}
+      {process.env.NODE_ENV === 'development' && <DevUserCreator />}
     </div>
   );
 }
