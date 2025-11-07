@@ -72,14 +72,20 @@ CREATE INDEX idx_users_online ON users(is_online) WHERE is_online = true;
 
 3. Click "Run" to execute the SQL
 
-## Step 3: Enable Realtime
+## Step 3: Enable Realtime (Critical for Chat Functionality)
 
 1. Go to "Realtime" in your Supabase dashboard
-2. Click "Enable" if not already enabled
-3. Click on "Realtime" row to expand
-4. Enable realtime for these tables:
-   - `messages`
-   - `users`
+2. If Realtime is disabled, click "Enable" 
+3. Click on the "Realtime" row to expand the settings
+4. **IMPORTANT**: Enable realtime for these specific tables:
+   - ✅ `messages` (required for real-time chat)
+   - ✅ `users` (required for online status updates)
+   - ❌ `chat_sessions` (not needed)
+   - ❌ `ratings` (not needed)
+
+5. Click "Save" to apply the changes
+
+**Verification**: After enabling, you should see a green "Enabled" status for the selected tables.
 
 ## Step 4: Configure Authentication
 
@@ -182,18 +188,57 @@ npm run dev
 
 ## Troubleshooting
 
-**Magic links not working:**
+### Magic links not working:
 - Check SMTP configuration in Supabase
 - Verify email domain is correct in `.env.local`
+- Ensure redirect URLs are configured in Auth settings
 
-**Messages not updating in real-time:**
-- Ensure Realtime is enabled for messages table
-- Check browser console for errors
+### **Real-time chat not working:**
+1. **Check Supabase Realtime Settings:**
+   - Go to Realtime dashboard and verify it's enabled
+   - Ensure `messages` table has realtime enabled
+   - Check for any error messages in the Realtime logs
 
-**Authentication failing:**
+2. **Check Browser Console:**
+   - Look for WebSocket connection errors
+   - Check for authentication errors
+   - Verify no CORS issues
+
+3. **Verify Environment Variables:**
+   ```bash
+   # Check that these are correctly set
+   echo $NEXT_PUBLIC_SUPABASE_URL
+   echo $NEXT_PUBLIC_SUPABASE_ANON_KEY
+   ```
+
+4. **Test Realtime Connection:**
+   Open browser console and run:
+   ```javascript
+   import { createClient } from '@supabase/supabase-js'
+   const client = createClient('YOUR_URL', 'YOUR_ANON_KEY')
+   const channel = client.channel('test')
+     .on('broadcast', { event: 'test' }, console.log)
+     .subscribe()
+   ```
+
+5. **Check RLS Policies:**
+   - Ensure RLS policies don't block realtime subscriptions
+   - Temporarily disable RLS for testing if needed
+
+6. **Network Issues:**
+   - Check if WebSocket connections are blocked by firewall
+   - Verify your browser supports WebSocket connections
+   - Try incognito mode to rule out extension conflicts
+
+### Authentication failing:
 - Clear browser cookies and cache
 - Verify Supabase URL and keys are correct
 - Check CORS settings in Supabase
+
+### Database connection issues:
+- Verify database URL format
+- Check database credentials
+- Ensure database is running and accessible
 
 ## Additional Resources
 
