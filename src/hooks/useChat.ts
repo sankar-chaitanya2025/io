@@ -28,10 +28,6 @@ export function useChat(sessionId: string | null) {
 
     fetchMessages();
 
-    return () => {
-      isMounted = false;
-    };
-
     const channel = supabase
       .channel(`session:${sessionId}`)
       .on(
@@ -49,6 +45,7 @@ export function useChat(sessionId: string | null) {
       .subscribe();
 
     return () => {
+      isMounted = false;
       supabase.removeChannel(channel);
     };
   }, [sessionId]);

@@ -78,7 +78,7 @@ CREATE POLICY "Users can update own sessions" ON chat_sessions
     FOR UPDATE TO authenticated
     USING (user1_id = auth.uid() OR user2_id = auth.uid());
 
--- RLS Policies for messages table
+-- RLS Policies for messages table (IMPORTANT for Realtime)
 CREATE POLICY "Users can view messages from their sessions" ON messages
     FOR SELECT TO authenticated
     USING (
@@ -117,3 +117,24 @@ CREATE POLICY "Users can insert ratings for their sessions" ON ratings
             WHERE user1_id = auth.uid() OR user2_id = auth.uid()
         )
     );
+
+-- Realtime Setup
+-- Create publication for realtime (if it doesn't exist)
+DROP PUBLICATION IF EXISTS supabase_realtime;
+CREATE PUBLICATION supabase_realtime FOR TABLE messages, users;
+
+-- Grant replication permissions (required for realtime)
+GRANT SELECT ON messages TO authenticated;
+GRANT SELECT ON users TO authenticated;
+
+-- Optional: Create function to clean up old sessions (run periodically)
+CREATE OR REPLACE FUNCTION cleanup_old_sessions()
+RETURNS void AS $
+BEGIN
+    -- End sessions that have been active for more than 24 hours
+    UPDATE chat_sessions 
+    SET status = 'ended', ended_at = NOW() 
+    WHERE status = 'active' 
+    AND started_at < NOW() - INTERVAL '24 hours';
+END;
+$ LANGUAGE plpgsql;

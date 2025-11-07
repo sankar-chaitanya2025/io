@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowRight, Flame, Loader2 } from 'lucide-react';
 import { generateAlias, generateOnlineCount, getRandomDelay } from '@/lib/names';
 import { supabase } from '@/lib/supabase';
 import { useChat } from '@/hooks/useChat';
+import { RealtimeDebugger } from '../debug/realtime-debugger';
 
 const autoResponses = [
   `Okay but that's kinda iconic.`,
@@ -171,28 +172,51 @@ export function DashboardContent() {
 
   // Online count updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      const channel = supabase
-        .channel('users:online')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'users',
-          },
-          () => {
-            setOnlineCount(generateOnlineCount());
-          }
-        )
-        .subscribe();
+    const updateOnlineCount = async () => {
+      try {
+        const { count } = await supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_online', true);
+        
+        if (count !== null) {
+          // Add some randomness to make it feel more alive
+          const variation = Math.floor(Math.random() * 20) - 10; // -10 to +10
+          const adjustedCount = Math.max(30, count + variation);
+          setOnlineCount(adjustedCount);
+        }
+      } catch (err) {
+        console.error('Error updating online count:', err);
+        // Fallback to random generation
+        setOnlineCount(generateOnlineCount());
+      }
+    };
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }, 6000);
+    // Initial count
+    updateOnlineCount();
 
-    return () => clearInterval(interval);
+    // Set up real-time subscription for user status changes
+    const channel = supabase
+      .channel('online-users')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'users',
+          filter: 'is_online=eq.true',
+        },
+        updateOnlineCount
+      )
+      .subscribe();
+
+    // Also update periodically to keep it fresh
+    const interval = setInterval(updateOnlineCount, 30000); // Every 30 seconds
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
   }, []);
 
   const { messages: realtimeMessages, sendMessage } = useChat(currentSessionId);
@@ -228,7 +252,7 @@ export function DashboardContent() {
         .eq('is_online', true)
         .eq('gender', userGender === 'dude' ? 'girl' : 'dude')
         .neq('id', userId)
-        .limit(5);
+        .limit(10);
 
       if (queryError) {
         throw queryError;
@@ -241,20 +265,61 @@ export function DashboardContent() {
         return;
       }
 
-      // Pick random match
-      const match = potentialMatches[Math.floor(Math.random() * potentialMatches.length)];
-      setMatchId(match.id);
-      setMatchAlias(match.alias || generateAlias());
+      // Filter out users we've already matched with recently
+      const { data: recentSessions } = await supabase
+        .from('chat_sessions')
+        .select('user1_id, user2_id')
+        .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
+        .gte('started_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
+        .limit(50);
+
+      const matchedUserIds = new Set<string>();
+      if (recentSessions) {
+        recentSessions.forEach(session => {
+          if (session.user1_id !== userId) matchedUserIds.add(session.user1_id);
+          if (session.user2_id !== userId) matchedUserIds.add(session.user2_id);
+        });
+      }
+
+      const availableMatches = potentialMatches.filter(match => !matchedUserIds.has(match.id));
+
+      if (availableMatches.length === 0) {
+        setStatus('idle');
+        setError('No new users available. Try again later for fresh matches!');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      // Pick random match with weighted selection (prefer users who've been online longer)
+      const weightedMatches = availableMatches.map(match => {
+        const hoursOnline = (Date.now() - new Date(match.last_active).getTime()) / (1000 * 60 * 60);
+        const weight = Math.min(hoursOnline / 2, 5); // Cap weight at 5
+        return { match, weight };
+      });
+
+      const totalWeight = weightedMatches.reduce((sum, item) => sum + item.weight, 0);
+      let random = Math.random() * totalWeight;
+      
+      let selectedMatch = weightedMatches[0].match;
+      for (const item of weightedMatches) {
+        random -= item.weight;
+        if (random <= 0) {
+          selectedMatch = item.match;
+          break;
+        }
+      }
+
+      setMatchId(selectedMatch.id);
+      setMatchAlias(selectedMatch.alias || generateAlias());
 
       // Simulate delay for user experience
       const delay = getRandomDelay();
       setTimeout(() => {
-        // Create chat session
-        createChatSession(match.id);
+        createChatSession(selectedMatch.id);
       }, delay);
     } catch (err) {
       console.error('Find error:', err);
-      setError('Failed to find match');
+      setError('Failed to find match. Please try again.');
       setStatus('idle');
     }
   };
@@ -758,6 +823,9 @@ export function DashboardContent() {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Development-only realtime debugger */}
+      {process.env.NODE_ENV === 'development' && <RealtimeDebugger />}
     </div>
   );
 }
